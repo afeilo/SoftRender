@@ -855,7 +855,7 @@ void screen_update(void) {
 //=====================================================================
 
 void draw_line(device_t *device){
-	device_draw_line(device, 0, 0, 800, 600, 0xc0c0c0);
+	device_draw_line(device, 0, 0, 800, 600, 0xffffff);
 }
 
 //=====================================================================
@@ -877,7 +877,10 @@ int main(void)
 	if (screen_init(800, 600, title))
 		return -1;
 	device_init(&device, 800, 600, screen_fb);
-
+	//TODO
+	// M 模型坐标转世界坐标 与每个模型localPosition有关系
+	// V 世界坐标转摄像机坐标
+	// P 摄像机坐标转裁剪坐标
 	while (screen_exit == 0 && screen_keys[VK_ESCAPE] == 0) {
 		screen_dispatch();
 		device_clear(&device, 1);
