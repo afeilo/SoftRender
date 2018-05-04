@@ -203,29 +203,27 @@ void matrix_set_rotate(matrix_t *m, float x, float y, float z, float theta) {
 // 设置摄像机
 void matrix_set_lookat(matrix_t *m, const vector_t *eye, const vector_t *at, const vector_t *up) {
 	vector_t xaxis, yaxis, zaxis;
-
 	vector_sub(&zaxis, at, eye);
 	vector_normalize(&zaxis);
 	vector_crossproduct(&xaxis, up, &zaxis);
 	vector_normalize(&xaxis);
 	vector_crossproduct(&yaxis, &zaxis, &xaxis);
-
+	vector_normalize(&yaxis);
 	m->m[0][0] = xaxis.x;
 	m->m[1][0] = xaxis.y;
 	m->m[2][0] = xaxis.z;
-	m->m[3][0] = -vector_dotproduct(&xaxis, eye);
-
+	m->m[3][0] = -vector_dotproduct(eye,&xaxis);
 	m->m[0][1] = yaxis.x;
 	m->m[1][1] = yaxis.y;
 	m->m[2][1] = yaxis.z;
-	m->m[3][1] = -vector_dotproduct(&yaxis, eye);
-
+	m->m[3][1] = -vector_dotproduct(eye, &yaxis);
 	m->m[0][2] = zaxis.x;
 	m->m[1][2] = zaxis.y;
 	m->m[2][2] = zaxis.z;
-	m->m[3][2] = -vector_dotproduct(&zaxis, eye);
-
-	m->m[0][3] = m->m[1][3] = m->m[2][3] = 0.0f;
+	m->m[3][2] = -vector_dotproduct(eye, &zaxis);
+	m->m[0][3] = 0.0f;
+	m->m[1][3] = 0.0f;
+	m->m[2][3] = 0.0f;
 	m->m[3][3] = 1.0f;
 }
 
@@ -855,7 +853,14 @@ void screen_update(void) {
 //=====================================================================
 
 void draw_line(device_t *device){
-	device_draw_line(device, 0, 0, 800, 600, 0xffffff);
+	vector_t avec,bvec,ac,bc;
+	point_t a = { 0, 0, 20, 1 }, b = { 10,10, 20, 1 };
+	transform_t trans = device->transform;
+	matrix_apply(&avec, &a, &trans.transform);
+	matrix_apply(&bvec, &b, &trans.transform);
+	transform_homogenize(&device->transform, &ac, &avec);
+	transform_homogenize(&device->transform, &bc, &bvec);
+	device_draw_line(device, ac.x, ac.y, bc.x, bc.y, 0xffffff);
 }
 
 //=====================================================================
@@ -881,6 +886,10 @@ int main(void)
 	// M 模型坐标转世界坐标 与每个模型localPosition有关系
 	// V 世界坐标转摄像机坐标
 	// P 摄像机坐标转裁剪坐标
+	matrix_set_identity(&device.transform.world);
+	point_t eye = { 0, 0, 1, 1 }, at = { 0, 0, 2, 1 }, up = { 0, 1, 0, 1 };
+	matrix_set_lookat(&device.transform.view, &eye, &at, &up);
+	transform_update(&device.transform);
 	while (screen_exit == 0 && screen_keys[VK_ESCAPE] == 0) {
 		screen_dispatch();
 		device_clear(&device, 1);
