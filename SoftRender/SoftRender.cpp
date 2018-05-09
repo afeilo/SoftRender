@@ -227,7 +227,7 @@ void matrix_set_lookat(matrix_t *m, const vector_t *eye, const vector_t *at, con
 	m->m[3][3] = 1.0f;
 }
 
-// D3DXMatrixPerspectiveFovLH
+// D3DXMatrixPerspectiveFovLH[0，1]
 void matrix_set_perspective(matrix_t *m, float fovy, float aspect, float zn, float zf) {
 	float fax = 1.0f / (float)tan(fovy * 0.5f);
 	matrix_set_zero(m);
@@ -263,6 +263,7 @@ void transform_init(transform_t *ts, int width, int height) {
 	float aspect = (float)width / ((float)height);
 	matrix_set_identity(&ts->world);
 	matrix_set_identity(&ts->view);
+	//90度 fov使用yz平面
 	matrix_set_perspective(&ts->projection, 3.1415926f * 0.5f, aspect, 1.0f, 500.0f);
 	ts->w = (float)width;
 	ts->h = (float)height;
@@ -532,7 +533,15 @@ void device_clear(device_t *device, int mode) {
 		IUINT32 cc = (height - 1 - y) * 230 / (height - 1);
 		cc = (cc << 16) | (cc << 8) | cc;
 		if (mode == 0) cc = device->background;
-		for (x = device->width; x > 0; dst++, x--) dst[0] = cc;
+		for (x = device->width; x > 0; dst++, x--){
+			int i, j;
+			if (mode == 1){
+				i = CMID((int)(x * device->tex_width / device->width), 0, 255);
+				j = CMID((int)(y * device->tex_height / device->height), 0, 255);
+				cc = device->texture[i][j];
+			}
+			dst[0] = cc; 
+		}
 	}
 	for (y = 0; y < device->height; y++) {
 		float *dst = device->zbuffer[y];
@@ -853,14 +862,34 @@ void screen_update(void) {
 //=====================================================================
 
 void draw_line(device_t *device){
-	vector_t avec,bvec,ac,bc;
-	point_t a = { 0, 0, 20, 1 }, b = { 10,10, 20, 1 };
+	vector_t avec,bvec,ovec,ac,bc,oc;
+	point_t a = { 0, 0, 20, 1 }, b = { 10, 10, 20, 1 }, o = { 0, 10, 20, 1 };
 	transform_t trans = device->transform;
+	//mvp变化
 	matrix_apply(&avec, &a, &trans.transform);
 	matrix_apply(&bvec, &b, &trans.transform);
+	matrix_apply(&ovec, &o, &trans.transform);
+	// cvv裁剪
+	// 视口变换转换为屏幕坐标
 	transform_homogenize(&device->transform, &ac, &avec);
 	transform_homogenize(&device->transform, &bc, &bvec);
+	transform_homogenize(&device->transform, &oc, &ovec);
+	// 背面剔除
 	device_draw_line(device, ac.x, ac.y, bc.x, bc.y, 0xffffff);
+	device_draw_line(device, bc.x, bc.y, oc.x, oc.y, 0xffffff);
+	device_draw_line(device, oc.x, oc.y, ac.x, ac.y, 0xffffff);
+}
+
+void init_texture(device_t *device) {
+	static IUINT32 texture[256][256];
+	int i, j;
+	for (j = 0; j < 256; j++) {
+		for (i = 0; i < 256; i++) {
+			int x = i / 32, y = j / 32;
+			texture[j][i] = ((x + y) & 1) ? 0xffffff : 0x3fbcef;
+		}
+	}
+	device_set_texture(device, texture, 256 * 4, 256, 256);
 }
 
 //=====================================================================
@@ -882,12 +911,13 @@ int main(void)
 	if (screen_init(800, 600, title))
 		return -1;
 	device_init(&device, 800, 600, screen_fb);
+	init_texture(&device);
 	//TODO
 	// M 模型坐标转世界坐标 与每个模型localPosition有关系
 	// V 世界坐标转摄像机坐标
 	// P 摄像机坐标转裁剪坐标
 	matrix_set_identity(&device.transform.world);
-	point_t eye = { 0, 0, 1, 1 }, at = { 0, 0, 2, 1 }, up = { 0, 1, 0, 1 };
+	point_t eye = { 0, 0, 0, 1 }, at = { 0, 0, 1, 1 }, up = { 0, 1, 0, 1 };
 	matrix_set_lookat(&device.transform.view, &eye, &at, &up);
 	transform_update(&device.transform);
 	while (screen_exit == 0 && screen_keys[VK_ESCAPE] == 0) {
